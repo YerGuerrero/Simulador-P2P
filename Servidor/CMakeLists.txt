@@ -3,4 +3,4 @@ project(Servidor C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(Servidor main.c)
+add_executable(Servidor servidor.c)

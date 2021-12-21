@@ -16,12 +16,16 @@ char txt[1024]="Hola cliente";
 int valread;
 
 
-void tablaHash(){
-
+void crearArchivo(){
+    //Se recibe los datos de los archivos
 }
 
-void hash(){
-
+void getMetodo(){
+    //Sacar protocolo SEND, FIND
+    // SEND crea archivo
+    // FIND buscar en el archivo y devuelve todos los que tiene ese nombre (toda la linea)
+    //
+    //Llamar a la función respectiva
 }
 
 int crearSocket(){
