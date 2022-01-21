@@ -16,17 +16,34 @@ char txt[1024]="Hola cliente";
 int valread;
 
 
-void crearArchivo(){
+void crearArchivo(char* buff){
     //Se recibe los datos de los archivos
 }
 
-void getMetodo(){
+/*void getMetodo(){
+
+        char buff[4096];
+        memset(buff, 0, 4096);
+        read(fd_client, buff, 4095);
+        char *method = strtok(buff, " ");
+        //char *filename = strtok(NULL, "/");
+        //filename = strtok(filename, " ");
+
+        if (strcmp(method, "SEND") == 0) {
+            crearArchivo(buf);
+            //get_method(fd_client, filename);
+        }if (strcmp(method, "FIND") == 0) {
+        //get_method(fd_client, filename);
+        }
+
+        close(fd_client);
+
     //Sacar protocolo SEND, FIND
     // SEND crea archivo
     // FIND buscar en el archivo y devuelve todos los que tiene ese nombre (toda la linea)
     //
     //Llamar a la función respectiva
-}
+}*/
 
 int crearSocket(){
     //Se crea el socket
@@ -80,8 +97,8 @@ int main (int argc, char const *argv[]){
         }
         printf("Cliente aceptado\n");
 
-        send(clienteSocket, txt, strlen(txt), 0);
+       /* send(clienteSocket, txt, strlen(txt), 0);
         valread = read( clienteSocket , request, 1024);
-        printf("%s\n",request);
+        printf("%s\n",request);*/
     }
 }
