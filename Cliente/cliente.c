@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #define MAX 10000
 
@@ -16,6 +17,7 @@ char* dirIP;
 char* puerto;
 char* puertoTrans;
 char* carpeta;
+int valread;
 
 long long int primos[] = {1000000007, (1LL<<31)-1}; // (10^9)+7, primo mas grande que cabe en entero
 //unsigned int le cabe (2^31)-1
@@ -53,13 +55,50 @@ char* cantidadBytes(char *response){
     return ptr;
 }
 
-/*void solicitarInstruccion(int clienteSocket) {
-    // COn scanf se pide la entrada por consola
-    if(clienteSocket=="FIND"){
-        snprintf(request, MAX, "%s%s%s","FIND /",nombreRecurso," HTTP/1.0 ");
-    } else if(clienteSocket=="REQUEST"){
-        snprintf(request, MAX, "%s%s%s","REQUEST /",nombreRecurso," HTTP/1.0 ");
+char* obtenerDatoSig(char* request){
+    char copiaRequest[1024];
+    strcpy(copiaRequest,request);
+    char *ptr = strtok(copiaRequest, " ");
+    ptr = strtok(NULL, " ");
+    return ptr;
+}
+
+char* obtenerDatoSigSig(char* request){
+    char copiaRequest[1024];
+    strcpy(copiaRequest,request);
+    char *ptr = strtok(copiaRequest, " ");
+    ptr = strtok(NULL, " ");
+    ptr = strtok(NULL, " ");
+    return ptr;
+}
+
+void solicitarInstruccion(int clienteSocket) {
+    char entrada[1024];
+    char buff[4096];
+    printf("Introduzca el comando a ejecutar: \n");
+    scanf("%[^\n]", entrada);
+
+    char instruccion[1024];
+    strcpy(instruccion,entrada);
+    char *modoEntrada = strtok(instruccion, " ");
+    if(strcmp(modoEntrada,"find")==0){
+        snprintf(request, MAX, "%s%s%s","FIND ",obtenerDatoSig(entrada)," HTTP/1.0 ");
+        write(clienteSocket, request, strlen(request));
+        //send(clienteSocket, request, sizeof(request), 0);// Se manda el request al servidor
+        printf("Request formado %s\n", request);
+        memset(buff, 0, 4096);
+        valread = read(clienteSocket, buff, 4096);
+        printf("%s\n", buff);
+    } else if(strcmp(modoEntrada,"request")==0){
+        // Buscar en el archivo que hizo el servidor y hacer conexion con los otros clientes por medio del IP y puerto
+        // Dividir tamaño del archivo con el numero de archivos encontrados
+        // Pedir a cada cliente el pedacito de video (ArchivoTemp-> que mantenga el orden)
+        // Construir el archivo y mandarselo al cliente que lo pidió.
+        snprintf(request, MAX, "%s%s %s%s","REQUEST ",obtenerDatoSig(entrada),obtenerDatoSigSig(entrada)," HTTP/1.0 ");
+        printf("Request formado %s\n", request);
+        //send(clienteSocket, request, sizeof(request), 0);// Se manda el request a los demás clientes
     }
+
     //Recibir si es un find o request
     // Si es find {
     // crea un request FIND nombre archivo
@@ -68,16 +107,8 @@ char* cantidadBytes(char *response){
     // crea un request y lo envia a los clientes
     // REQUEST hash Tam
     // }
-    /*char buffer[1024] = {0};
-    char request[MAX];
-    double bytes = 0;
-    snprintf(request, MAX, "%s%s%s","GET /",nombreRecurso," HTTP/1.0 ");
-    send(clienteSocket, request, sizeof(request), 0);
-    read(clienteSocket , buffer, 1024);
-    bytes = atoi(cantidadBytes(buffer));
-    return bytes;
 
-}*/
+}
 
 //CON FUNC VIDEO PROFE
 long long calcHash(char *s, int p){
@@ -90,13 +121,15 @@ long long calcHash(char *s, int p){
 
 
 int enviarInformacion(int clienteSocket){
-    snprintf(request, MAX, "%s%s%s\n","SEND ",dirIP, puerto);
+    snprintf(request, MAX, "%s%s %s\n","SEND ",dirIP, puerto);
     char temp[MAX];
     DIR *folder;
     struct dirent *entry;
     int files = 0;
-    char* nombreArchivo;
-    nombreArchivo= carpeta;
+    char nombreArchivo[1024];
+    char* ruta;
+    ruta=carpeta;
+    strcat(ruta,"/");
     folder = opendir(carpeta);
     if(folder == NULL){
         perror("No se puede leer la carpeta");
@@ -104,21 +137,22 @@ int enviarInformacion(int clienteSocket){
     }
     while((entry=readdir(folder))){
         if(strcmp(entry->d_name,"..")!= 0 && strcmp(entry->d_name,".")!= 0){
+            memset(nombreArchivo, 0,1024);
             files++;
-            strcat(nombreArchivo,"/");
+            strcpy(nombreArchivo, ruta);
             strcat(nombreArchivo,entry->d_name);
             struct stat estadoBuffer;
             int fd = open(nombreArchivo, O_RDONLY);
             fstat(fd, &estadoBuffer);
-            snprintf(temp, MAX, "%s %ld %s %u\n",entry->d_name,estadoBuffer.st_size,"Hash",estadoBuffer.st_uid);
+            snprintf(temp, MAX, "%s %ld %lld %u\n",entry->d_name,estadoBuffer.st_size,calcHash(entry->d_name,1),estadoBuffer.st_uid);
             strcat(request,temp);
 
         }
     }
     printf("\n%s\n",request);
     closedir(folder);
-    //Mandarselo al servidor
-    //write(clienteSocket, request, strlen(request));
+    write(clienteSocket, request, strlen(request));
+    //send(clienteSocket, request, sizeof(request), 0);// Se manda el request al servidor
     return 0;
 }
 
@@ -143,18 +177,25 @@ int conectarServidor(){
     if( connect(socket_fd, (struct sockaddr *) &sock_addr, sizeAddr) < 0 ){
         printf("Falla conexión\n");
     }
-    enviarInformacion(socket_fd);
-    //solicitarInstruccion(socket_fd);
-    return 0;
+
+
+
+    return socket_fd;
 }
 
 void *pthreadFunc(void *args){
     long thread_id = (long) args;
+    int socket_fd;
+    char buffFind[4096];
+    memset(buffFind, 0, 4096);
     pthread_mutex_lock(&mutex);
     printf("Se solicita recurso %li\n", thread_id);
-    conectarServidor();
-    pthread_mutex_unlock(&mutex);
+    socket_fd= conectarServidor();
+    enviarInformacion(socket_fd);
+    solicitarInstruccion(socket_fd);
 
+    pthread_mutex_unlock(&mutex);
+    return 0;
 }
 
 void hiloCliente(){
@@ -178,9 +219,9 @@ int main(int argc, char *argv[]) {
     puerto = argv[2];
     puertoTrans = argv[3];
     carpeta = argv[4];
-    printf("%s\n",dirIP);
-    printf("%s\n",puerto);
-    printf("%s\n",puertoTrans);
-    printf("%s\n",carpeta);
+    //printf("%s\n",dirIP);
+    //printf("%s\n",puerto);
+    //printf("%s\n",puertoTrans);
+    //printf("%s\n",carpeta);
     hiloCliente();
 }
