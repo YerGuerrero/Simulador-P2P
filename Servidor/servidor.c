@@ -34,40 +34,42 @@ void crearArchivo(char* request){
     char *ipAdress;
     char *puerto, *puertoB;
     ipAdress= obtenerDato(request,2);
-    printf("IP %s\n",ipAdress);
-    printf("REQUEST %s\n",request);
     puerto= obtenerDato(request,3);
     puertoB = strtok(puerto, "\n");
-    printf("PUERTO %s\n",puertoB);
-    //printf("%s\n",request);
-
-    printf("Metodo SEND-> Crear archivo\n");
+    printf("\n------------------\nCreando archivo\n------------------\n\n");
+    printf("REQUEST RECIBIDO:\n%s\n\n",request);
     FILE *f = fopen("tabla.txt", "a");
     if (f == NULL)
     {
         printf("No se puede abrir el archivo!\n");
         exit(1);
     }
-    char *str1, *token, *temp2;
+    char token[1024];
+    char *str1, *temp;
     int j;
-
-    for (j = 1, str1=request; ; ++j, str1 = NULL) {// Revisar
-        token = strtok(str1, "\n");
-        printf("TOKEN: %s", token);
-        strncpy(temp2,token, strlen(token)-2);
-        char temp[MAX];
-        if (token == NULL)
+    int len;
+    printf("ARCHIVO:\n");
+    for (j = 1, str1=request; ; ++j, str1 = NULL) {
+        memset(token, 0, 1024);
+        temp = strtok(str1, "\n");
+        if (temp == NULL)
             break;
-        else if(j!=1){
-            snprintf(temp, MAX, " %s %s",ipAdress,puertoB);
-            //printf("TEMP %s",temp);
-            strcat(temp2,temp);
-            strcat(temp2,"\n");
-            //fprintf(f, "%s\n", token);
-            printf("%d: %s\n", j, temp2);
+
+        strcpy(token,temp);
+        len = strlen(token);
+        if(token[len - 1] == '\n')//Verificamos si el último caracter es un salto de línea
+            token[len - 1] = '\0';//Eliminamos el salto de línea
+
+        else if (j!=1){
+            snprintf(temp, MAX, " %s %s\n",ipAdress,puertoB);
+            strcat(token,temp);
+            fprintf(f, "%s", token);
+            printf("%d: %s", j-1, token);
         }
+
     }
     fclose(f);
+    printf("\n------------------\nArchivo Creado\n------------------\n\n");
     return;
 }
 
@@ -88,7 +90,7 @@ void getMetodoSEND(int clienteSocket){
 void buscarArchivo(char *nameFile,int clienteSocket){
     char name[MAX];
     char archivos[MAX];
-    int matches;
+    int matches=0;
     strcpy(name,nameFile);
 
     FILE *file = fopen("tabla.txt", "r");
@@ -101,19 +103,15 @@ void buscarArchivo(char *nameFile,int clienteSocket){
                 matches++;
                 char temp[MAX];
                 fprintf(fTemp, "%s", line);
-                //Escribir en el cliente
-                //hacer archivo para almacenarlo y leerlo en el cliente
-                //
                 char *tamano= obtenerDato(line,2);
                 char *hash= obtenerDato(line,3);
                 snprintf(temp, MAX, "%s %s\n",tamano,hash);
                 strcat(archivos,temp);
-                //Se envía request
             }
         }
         write(clienteSocket, archivos, strlen(archivos));
-        printf("\n%d\n", matches);
-
+        printf("\nArchivos encontrados: %d\n", matches);
+        printf("\nArchivos enviados:\n%s\n", archivos);
     }
     fclose(file);
     fclose(fTemp);
@@ -126,9 +124,8 @@ void getMetodoFIND(int clienteSocket){
     char * nameFile;
     memset(buffFind, 0, 4096);
     valread = read(clienteSocket, buffFind, 4096);
-    printf("%s\n", buffFind);
+    printf("REQUEST RECIBIDO:\n%s\n", buffFind);
     nameFile= obtenerDato(buffFind,2);
-    printf("%s\n", nameFile);
     buscarArchivo(nameFile, clienteSocket);
 
    //Buscar en archivo
