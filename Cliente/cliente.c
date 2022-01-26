@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <math.h>
 
 #define MAX 10000
 
@@ -18,6 +19,16 @@ char* puerto;
 char* puertoTrans,*puertoB;
 char* carpeta;
 int valread;
+char direccionesIP[MAX];
+int numClientes;
+typedef struct Par{
+    char* nombreArchivo;
+    char* size;
+    char* hash;
+    char* autor;
+    char* ip;
+    char* puerto;
+}Par;
 
 
 long long int primos[] = {1000000007, (1LL<<31)-1}; // (10^9)+7, primo mas grande que cabe en entero
@@ -46,16 +57,6 @@ long long expLogMod(int base, int exp, int p){
     }
 }
 
-char* cantidadBytes(char *response){
-    char copiaResponse[1024];
-    strcpy(copiaResponse,response);
-    char *ptr = strtok(copiaResponse, " ");
-    ptr = strtok(NULL, " ");
-    ptr = strtok(NULL, " ");
-    ptr = strtok(NULL, " ");
-    return ptr;
-}
-
 char* obtenerDato(char* request, int pos){
     char copiaRequest[1024];
     strcpy(copiaRequest,request);
@@ -66,33 +67,33 @@ char* obtenerDato(char* request, int pos){
     return ptr;
 }
 
-int conectarClientes(char* dirIP, char* puerto){
+int conectarClientes(Par par){
     int socket_cliente;
-    struct sockaddr_in sock_addr;
-    int sizeAddr = sizeof(sock_addr);
-    sock_addr.sin_family = AF_INET;
-    sock_addr.sin_addr.s_addr = inet_addr(dirIP);
-    sock_addr.sin_port = htons(atoi(puerto));
+    struct sockaddr_in cliente_addr;
+    int sizeAddr = sizeof(cliente_addr);
+    cliente_addr.sin_family = AF_INET;
+    cliente_addr.sin_addr.s_addr = inet_addr(par.ip);
+    cliente_addr.sin_port = htons(atoi(par.puerto));
     socket_cliente = socket(AF_INET,SOCK_STREAM,0);
     if( socket_cliente < 0 ){
         printf("No se creó el socket :c\n");
         return -1;
     }
-    if(inet_pton(AF_INET, dirIP, &sock_addr.sin_addr)<=0)
+    if(inet_pton(AF_INET, par.ip, &cliente_addr.sin_addr)<=0)
     {
         printf("\nInvalid address/ Address not supported \n");
         return -1;
     }
 
-    if( connect(socket_cliente, (struct sockaddr *) &sock_addr, sizeAddr) < 0 ){
+    if( connect(socket_cliente, (struct sockaddr *) &cliente_addr, sizeAddr) < 0 ){
         printf("Falla conexión\n");
     }
     return socket_cliente;
 }
 
-void buscarArchivo(char *hash, int socket_fd){
+int buscarIP(char *hash, int socket_fd){
     char hashFile[MAX];
-    char archivos[MAX];
+    char temp[MAX];
     int matches=0;
     int clienteConexion;
     strcpy(hashFile,hash);
@@ -105,26 +106,33 @@ void buscarArchivo(char *hash, int socket_fd){
         while ( fgets ( line, sizeof line, file ) != NULL ){
             if(strstr(line,hashFile)!= NULL) {
                 matches++;
-                char temp[MAX];
                 //fprintf(fTemp, "%s", line);
-                char
                 char *ip= obtenerDato(line,5);
                 char *puerto= obtenerDato(line,6);
                 puertoB = strtok(puerto, "\n");
-                clienteConexion= conectarClientes(ip,puertoB);
+                //clienteConexion= conectarClientes(ip,puertoB);
                 //Mandar al clienteSocket el pedacito de canción.
-                snprintf(request, MAX, "%s%s %s%s","SOLICITAR ",ip,puertoB," HTTP/1.0 ");
-                printf("Request formado %s\n", request);
-                write(clienteConexion, request, strlen(request));
+                snprintf(temp, MAX, "%s %s\n",ip,puertoB);
+                printf("temp formado %s\n", temp);
+                strcat(direccionesIP,temp);
+                //write(clienteConexion, request, strlen(request));
             }
         }
         //write(clienteSocket, archivos, strlen(archivos));
         printf("\nArchivos encontrados: %d\n", matches);
-        printf("\nArchivos enviados:\n%s\n", archivos);
+
     }
     fclose(file);
-    return ;
+    return matches;
 
+}
+
+void *enviarRequest(void *args args){
+    Par par = *((Par*)args);
+    int clienteConexion;
+    clienteConexion= conectarClientes(par);
+
+    return ;
 }
 
 void solicitarInstruccion(int clienteSocket) {
@@ -144,8 +152,54 @@ void solicitarInstruccion(int clienteSocket) {
         valread = read(clienteSocket, buff, 4096);
         printf("\n------------------\nArchivos Econtrados\n------------------\n%s\n",buff);
     } else if(strcmp(modoEntrada,"request")==0){
+        char str1[1024];
+        char token[1024];
+        char* listaDirecciones, *temp ;
         char *hash= obtenerDato(entrada,3);
-        buscarArchivo(hash, clienteSocket);
+        printf("\nhash: %s\n", hash);
+        numClientes= buscarIP(hash, clienteSocket);
+        Par *lista_Clientes = malloc(sizeof(Par)*numClientes);
+        printf("\nDirecciones:\n%s\n", direccionesIP);
+        char* size= obtenerDato(entrada, 2);
+        printf("\nsize: %s\n", size);
+        int tamanoBloque= ceil(atoi(size)/numClientes);
+        printf("\nTAMAÑO BLOQUE: %d\n", tamanoBloque);
+        strcpy(str1,direccionesIP);
+        for (int j = 0; j<numClientes ; ++j) {
+            temp = strtok(str1, "\n");
+            printf("TEMP: %s\n\n",temp);
+            if (temp == NULL)
+                break;
+            char *ipAdress;
+            char *puerto;
+            ipAdress= obtenerDato(temp,1);
+            puerto= obtenerDato(temp,2);
+            lista_Clientes[j].nombreArchivo=obtenerDato(entrada, 1);
+            lista_Clientes[j].size=obtenerDato(entrada, 2);
+            lista_Clientes[j].hash=obtenerDato(entrada, 3);
+            lista_Clientes[j].autor= obtenerDato(entrada, 4);
+            lista_Clientes[j].ip=ipAdress;
+            lista_Clientes[j].puerto=puerto;
+            pthread_t threads[numClientes];
+            pthread_create(&threads[j],NULL,enviarRequest, &lista_Clientes[j]);
+            printf("IPAddress Cliente %d: %s\n", j+1, ipAdress);
+            printf("Puerto Cliente %d: %s\n", j+1, puerto);
+        }
+        //Hacer un for desde 0 al numcliente-1 archivo =NULL
+        // Leer cada linea del sring separados por salto de línea
+        //Saco puerto y ip y los pongo en un struct
+        // creo un hilo
+        //Hago la conexion al puerto y a la ip
+
+        // Hago reguest
+        // escribo el request
+        // enviar file por pedazo [byte- byte]
+        // Recibir file y escribir en archivo
+        // LLamar función de armar con el archivo
+        //Guardar en la carpeta**
+
+
+        // Sacar el ip y el puerto de cada linea
         // Buscar en el archivo que hizo el servidor y hacer conexion con los otros clientes por medio del IP y puerto
         // Dividir tamaño del archivo con el numero de archivos encontrados
         // Pedir a cada cliente el pedacito de video (ArchivoTemp-> que mantenga el orden)
@@ -153,15 +207,6 @@ void solicitarInstruccion(int clienteSocket) {
 
         //send(clienteSocket, request, sizeof(request), 0);// Se manda el request a los demás clientes
     }
-
-    //Recibir si es un find o request
-    // Si es find {
-    // crea un request FIND nombre archivo
-    // }
-    // Si es request{
-    // crea un request y lo envia a los clientes
-    // REQUEST hash Tam
-    // }
 
 }
 
@@ -274,9 +319,5 @@ int main(int argc, char *argv[]) {
     puerto = argv[2];
     puertoTrans = argv[3];
     carpeta = argv[4];
-    //printf("%s\n",dirIP);
-    //printf("%s\n",puerto);
-    //printf("%s\n",puertoTrans);
-    //printf("%s\n",carpeta);
     hiloCliente();
 }

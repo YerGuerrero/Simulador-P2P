@@ -127,8 +127,6 @@ void getMetodoFIND(int clienteSocket){
     printf("REQUEST RECIBIDO:\n%s\n", buffFind);
     nameFile= obtenerDato(buffFind,2);
     buscarArchivo(nameFile, clienteSocket);
-
-   //Buscar en archivo
 }
 
 
